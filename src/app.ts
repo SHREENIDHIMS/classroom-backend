@@ -1,38 +1,34 @@
-import { relations } from "drizzle-orm";
-import { integer, pgTable, varchar } from "drizzle-orm/pg-core";
+import express from 'express';
+import departmentsRouter from './routes/departments.js';
+import subjectsRouter from './routes/subjects.js';
+import cors from 'cors';
+const app = express();
 
-const timestamps = {
-    createdAt: varchar('created_at', { length: 255 }).notNull().default('CURRENT_TIMESTAMP'),
-    updatedAt: varchar('updated_at', { length: 255 }).notNull().default('CURRENT_TIMESTAMP').$onUpdate(() => new Date().toISOString()).notNull(),
-};
+app.use(cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true,
+}))
 
-export const departments = pgTable('departments', {
-    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-    code: varchar('code', { length: 50 }).notNull().unique(),
-    name: varchar('name', { length: 50 }).notNull().unique(),
-    description: varchar('description', { length: 500 }),
-    ...timestamps
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.get('/', (_req, res) => {
+    res.json({ message: 'Hello from Classroom API!' });
 });
 
-export const subjects = pgTable('subjects', {
-    id: integer('id').primaryKey().generatedAlwaysAsIdentity(),
-    departmentId: integer('department_id').notNull().references(() => departments.id, { onUpdate: 'restrict' }),
-    code: varchar('code', { length: 50 }).notNull().unique(),
-    name: varchar('name', { length: 50 }).notNull().unique(),
-    description: varchar('description', { length: 500 }),
-    ...timestamps
+app.use('/departments', departmentsRouter);
+app.use('/subjects', subjectsRouter);
+
+// 404 handler
+app.use((_req, res) => {
+    res.status(404).json({ error: 'Route not found' });
 });
 
-export const departmentrelationships = relations(departments, ({many}) => ({subjects: many(subjects)}));
+// Global error handler
+app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+});
 
-export const subjectRelationships = relations(subjects, ({one}) => ({
-    department: one(departments, {
-        fields: [subjects.departmentId],
-        references: [departments.id],
-    })
-}));
-
-export type Department = typeof departments.$inferSelect;
-export type NewDepartment = typeof departments.$inferInsert;
-export type Subject = typeof subjects.$inferSelect;
-export type NewSubject = typeof subjects.$inferInsert;
+export default app;
